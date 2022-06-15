@@ -402,6 +402,9 @@ man_MANS =                                      \
   CURLOPT_WILDCARDMATCH.3                       \
   CURLOPT_WRITEDATA.3                           \
   CURLOPT_WRITEFUNCTION.3                       \
+  CURLOPT_WS_OPTIONS.3                          \
+  CURLOPT_WS_WRITEDATA.3                        \
+  CURLOPT_WS_WRITEFUNCTION.3                    \
   CURLOPT_XFERINFODATA.3                        \
   CURLOPT_XFERINFOFUNCTION.3                    \
   CURLOPT_XOAUTH2_BEARER.3                      \

@@ -152,6 +152,12 @@ Data pointer to pass to resolver start callback. See \fICURLOPT_RESOLVER_START_D
 Callback to be called after a connection is established but before a request is made on that connection. See \fICURLOPT_PREREQFUNCTION(3)\fP
 .IP CURLOPT_PREREQDATA
 Data pointer to pass to the CURLOPT_PREREQFUNCTION callback. See \fICURLOPT_PREREQDATA(3)\fP
+.IP CURLOPT_WS_WRITEFUNCTION
+Callback called when there is websocket data to deliver. See
+\fICURLOPT_WS_WRITEFUNCTION(3)\fP
+.IP CURLOPT_WS_WRITEDATA
+Data pointer to pass to the \fICURLOPT_WS_WRITEFUNCTION(3)\fP callback. See
+\fICURLOPT_WS_WRITEDATA(3)\fP
 .SH ERROR OPTIONS
 .IP CURLOPT_ERRORBUFFER
 Error message buffer. See \fICURLOPT_ERRORBUFFER(3)\fP
@@ -670,6 +676,9 @@ Custom pointer to pass to ssh key callback. See \fICURLOPT_SSH_KEYDATA(3)\fP
 Callback for checking host key handling. See \fICURLOPT_SSH_HOSTKEYFUNCTION(3)\fP
 .IP CURLOPT_SSH_HOSTKEYDATA
 Custom pointer to pass to ssh host key callback. See \fICURLOPT_SSH_HOSTKEYDATA(3)\fP
+.SH WEBSOCKETS
+.IP CURLOPT_WS_OPTIONS
+Set Websockets options. See \fICURLOPT_WS_OPTIONS(3)\fP
 .SH OTHER OPTIONS
 .IP CURLOPT_PRIVATE
 Private pointer to store. See \fICURLOPT_PRIVATE(3)\fP
