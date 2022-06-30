@@ -155,7 +155,7 @@ static void ws_decode_clear(struct Curl_easy *data)
 
 /* ws_decode() decodes a binary frame into structured WebSocket data,
 
-   pkt - the incoming raw data
+   wpkt - the incoming raw data. If NULL, work on the already buffered data.
    ilen - the size of the provided data, perhaps too little, perhaps too much
    out - stored pointed to extracted data
    olen - stored length of the extracted data
@@ -171,6 +171,7 @@ static void ws_decode_clear(struct Curl_easy *data)
 static CURLcode ws_decode(struct Curl_easy *data,
                           unsigned char *wpkt, size_t ilen,
                           unsigned char **out, size_t *olen,
+                          unsigned char **endp,
                           unsigned int *flags)
 {
   bool fin;
@@ -185,10 +186,12 @@ static CURLcode ws_decode(struct Curl_easy *data,
 
   *olen = 0;
 
-  /* add the incoming bytes */
-  result = Curl_dyn_addn(&wsp->buf, wpkt, ilen);
-  if(result)
-    return result;
+  /* add the incoming bytes, if any */
+  if(wpkt) {
+    result = Curl_dyn_addn(&wsp->buf, wpkt, ilen);
+    if(result)
+      return result;
+  }
 
   plen = Curl_dyn_len(&wsp->buf);
   if(plen < 2)
@@ -260,7 +263,7 @@ static CURLcode ws_decode(struct Curl_easy *data,
   /* return the payload length */
   *olen = payloadssize;
   wsp->usedbuf = total; /* number of bytes "used" from the buffer */
-
+  *endp = &p[total];
   infof(data, "WS: received %u bytes payload", payloadssize);
   return CURLE_OK;
 }
@@ -282,26 +285,41 @@ size_t Curl_ws_writecb(char *buffer, size_t size /* 1 */,
     size_t wslen;
     unsigned int recvflags;
     CURLcode result;
+    unsigned char *endp;
     decode:
     result = ws_decode(data, (unsigned char *)buffer, nitems,
-                       &wsp, &wslen, &recvflags);
-    if(result == CURLE_AGAIN) {
+                       &wsp, &wslen, &endp, &recvflags);
+    if(result == CURLE_AGAIN)
       /* insufficient amount of data, keep it for later */
-    }
-    if(result) {
+      return nitems;
+    else if(result) {
       infof(data, "WS: decode error %d", (int)result);
       return nitems - 1;
     }
-    /* TODO: store details about the frame in a struct to be reachable with
-       curl_ws_meta() from within the write callback */
+    /* auto-respond to PINGs */
+    if(recvflags & CURLWS_PING) {
+      size_t bytes;
+      infof(data, "WS: auto-respond to PING with a PONG");
+      /* send back the exact same content as a PONG */
+      result = curl_ws_send(data, wsp, wslen, &bytes, CURLWS_PONG);
+      if(result)
+        return result;
+    }
+    else {
+      /* TODO: store details about the frame in a struct to be reachable with
+         curl_ws_meta() from within the write callback */
 
-    /* deliver the decoded frame to the user callback */
-    if(data->set.fwrite_func((char *)wsp, 1, wslen, writebody_ptr) != wslen)
-      return 0;
-
+      /* deliver the decoded frame to the user callback */
+      if(data->set.fwrite_func((char *)wsp, 1, wslen, writebody_ptr) != wslen)
+        return 0;
+    }
     /* the websocket frame has been delivered */
     ws_decode_clear(data);
-    goto decode;
+    if(endp) {
+      /* there's more websocket data to deal with in the buffer */
+      buffer = NULL; /* don't pass in the data again */
+      goto decode;
+    }
   }
   return nitems;
 }
@@ -329,9 +347,10 @@ CURLcode curl_ws_recv(struct Curl_easy *data, void *buffer, size_t buflen,
     if(bytes) {
       unsigned char *out;
       size_t olen;
+      unsigned char *endp;
       infof(data, "WS: got %u websocket bytes to decode", (int)bytes);
       result = ws_decode(data, (unsigned char *)data->state.buffer,
-                         bytes, &out, &olen, recvflags);
+                         bytes, &out, &olen, &endp, recvflags);
       if(result == CURLE_AGAIN)
         /* a packet fragment only */
         break;
@@ -489,21 +508,33 @@ CURLcode curl_ws_send(struct Curl_easy *data, const void *buffer,
     return CURLE_BAD_FUNCTION_ARGUMENT;
   }
 
-  if(data->set.ws_raw_mode && Curl_is_in_callback(data)) {
-    /* raw mode sends exactly what was requested, and this is from within
-       the write callback */
-    ssize_t written;
-    result = Curl_write(data, data->conn->writesockfd, buffer, buflen,
-                        &written);
-    fprintf(stderr, "WS: wanted to send %u bytes, sent %u bytes\n",
-            (int)buflen, (int)written);
-    bytes = written;
-  }
-  else {
+  if(!data->set.ws_raw_mode) {
     result = Curl_get_upload_buffer(data);
     if(result)
       return result;
+  }
 
+  if(Curl_is_in_callback(data)) {
+    ssize_t written;
+    if(data->set.ws_raw_mode) {
+      /* raw mode sends exactly what was requested, and this is from within
+         the write callback */
+      result = Curl_write(data, data->conn->writesockfd, buffer, buflen,
+                          &written);
+      infof(data, "WS: wanted to send %u bytes, sent %u bytes",
+            (int)buflen, (int)written);
+    }
+    else {
+      plen = ws_packet(data, buffer, buflen, sendflags);
+      out = data->state.ulbuf;
+      result = Curl_write(data, data->conn->writesockfd, out, plen,
+                          &written);
+      infof(data, "WS: wanted to send %u bytes, sent %u bytes",
+            (int)plen, (int)written);
+    }
+    bytes = written;
+  }
+  else {
     plen = ws_packet(data, buffer, buflen, sendflags);
 
     out = data->state.ulbuf;
