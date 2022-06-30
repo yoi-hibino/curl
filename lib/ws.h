@@ -39,6 +39,8 @@
 CURLcode Curl_ws_request(struct Curl_easy *data, REQTYPE *req);
 CURLcode Curl_ws_accept(struct Curl_easy *data);
 
+size_t Curl_ws_writecb(char *buffer, size_t size, size_t nitems, void *userp);
+
 #else
 #define Curl_ws_request(x,y) CURLE_OK
 #endif
