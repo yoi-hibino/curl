@@ -89,6 +89,7 @@ CURLcode Curl_ws_request(struct Curl_easy *data, REQTYPE *req)
   }
   free(randstr);
   k->upgr101 = UPGR101_WS;
+  Curl_dyn_init(&data->req.p.http->ws.buf, MAX_WS_SIZE * 2);
   return result;
 }
 
@@ -140,31 +141,16 @@ CURLcode Curl_ws_accept(struct Curl_easy *data)
 
 #define WSBIT_MASK 0x80
 
-/* wslen() returns nextra + the given size */
-static size_t wslen(struct Curl_easy *data,
-                    size_t len)
+/* remove the spent bytes from the beginning of the buffer as that part has
+   now been delivered to the application */
+static void ws_decode_clear(struct Curl_easy *data)
 {
   struct websockets *wsp = &data->req.p.http->ws;
-  return wsp->nextra + len;
-}
-
-/* wsoctet() returns the byte at 'index', and it supports checking in the
-   'extra' buffer if it is used */
-static unsigned char wsoctet(struct Curl_easy *data,
-                             unsigned char *pkt,
-                             size_t index)
-{
-  struct websockets *wsp = &data->req.p.http->ws;
-  if(index < wsp->nextra)
-    return wsp->extra[index];
-  return pkt[index - wsp->nextra];
-}
-
-static void wsappend(struct websockets *wsp, unsigned char *wpkt,
-                     size_t len)
-{
-  memcpy(&wsp->extra[wsp->nextra], wpkt, len);
-  wsp->nextra += len;
+  size_t spent = wsp->usedbuf;
+  size_t len = Curl_dyn_len(&wsp->buf);
+  size_t keep = len - spent;
+  DEBUGASSERT(len >= spent);
+  Curl_dyn_tail(&wsp->buf, keep);
 }
 
 /* ws_decode() decodes a binary frame into structured WebSocket data,
@@ -185,26 +171,34 @@ static void wsappend(struct websockets *wsp, unsigned char *wpkt,
 static CURLcode ws_decode(struct Curl_easy *data,
                           unsigned char *wpkt, size_t ilen,
                           unsigned char **out, size_t *olen,
-                          unsigned char **endp,
                           unsigned int *flags)
 {
   bool fin;
   unsigned char opcode;
   size_t total;
   size_t dataindex = 2;
-  size_t len;
+  size_t plen; /* size of data in the buffer */
+  size_t payloadssize;
   struct websockets *wsp = &data->req.p.http->ws;
+  unsigned char *p;
+  CURLcode result;
 
   *olen = 0;
-  *endp = NULL;
-  if(wslen(data, ilen) < 2) {
-    /* the smallest possible frame is two bytes */
-    wsappend(wsp, wpkt, ilen);
-    return CURLE_AGAIN;
-  }
 
-  fin = wsoctet(data, wpkt, 0) & WSBIT_FIN;
-  opcode = wsoctet(data, wpkt, 0) & WSBIT_OPCODE_MASK;
+  /* add the incoming bytes */
+  result = Curl_dyn_addn(&wsp->buf, wpkt, ilen);
+  if(result)
+    return result;
+
+  plen = Curl_dyn_len(&wsp->buf);
+  if(plen < 2)
+    /* the smallest possible frame is two bytes */
+    return CURLE_AGAIN;
+
+  p = Curl_dyn_uptr(&wsp->buf);
+
+  fin = p[0] & WSBIT_FIN;
+  opcode = p[0] & WSBIT_OPCODE_MASK;
   infof(data, "WS: received FIN bit %u", (int)fin);
   *flags = 0;
   switch(opcode) {
@@ -235,49 +229,39 @@ static CURLcode ws_decode(struct Curl_easy *data,
     break;
   }
 
-  if(wsoctet(data, wpkt, 1) & WSBIT_MASK) {
+  if(p[1] & WSBIT_MASK) {
     /* A client MUST close a connection if it detects a masked frame. */
     failf(data, "WS: masked input frame");
     return CURLE_RECV_ERROR;
   }
-  len = wsoctet(data, wpkt, 1);
-  if(len == 126) {
-    if(wslen(data, ilen) < 4) {
-      wsappend(wsp, wpkt, ilen);
+  payloadssize = p[1];
+  if(payloadssize == 126) {
+    if(plen < 4)
       return CURLE_AGAIN; /* not enough data available */
-    }
-    len = (wsoctet(data, wpkt, 2) << 8) | wsoctet(data, wpkt, 3);
+    payloadssize = (p[2] << 8) | p[3];
     dataindex += 2;
   }
-  else if(len == 127) {
+  else if(payloadssize == 127) {
     failf(data, "WS: too large frame received");
     return CURLE_RECV_ERROR;
   }
 
-  total = dataindex + 2 + len;
+  total = dataindex + payloadssize;
   if(total > ilen) {
-    /* not enough data yet */
+    /* not enough data in buffer yet */
     /* infof(data, "WS: decoded %u bytes, expected %u",
        (int)total, (int)ilen); */
-    wsappend(wsp, wpkt, ilen);
     return CURLE_AGAIN;
   }
-  /* there is enough data */
-  if(wsp->nextra) {
-    /* a piece of it is in the extra buffer, so append the remainder and point
-       to that complete frame */
-    wsappend(wsp, wpkt, total);
-    *out = &wsp->extra[total - 2 - len];
-    wsp->nextra = 0; /* consider it drained after this */
-  }
-  else
-    /* point to the payload */
-    *out = &wpkt[dataindex];
+
+  /* point to the payload */
+  *out = &p[dataindex];
 
   /* return the payload length */
-  *olen = len;
+  *olen = payloadssize;
+  wsp->usedbuf = total; /* number of bytes "used" from the buffer */
 
-  infof(data, "WS: received %u bytes payload", len);
+  infof(data, "WS: received %u bytes payload", payloadssize);
   return CURLE_OK;
 }
 
@@ -297,11 +281,10 @@ size_t Curl_ws_writecb(char *buffer, size_t size /* 1 */,
     unsigned char *wsp;
     size_t wslen;
     unsigned int recvflags;
-    unsigned char *endp = NULL;
     CURLcode result;
     decode:
     result = ws_decode(data, (unsigned char *)buffer, nitems,
-                       &wsp, &wslen, &endp, &recvflags);
+                       &wsp, &wslen, &recvflags);
     if(result == CURLE_AGAIN) {
       /* insufficient amount of data, keep it for later */
     }
@@ -316,13 +299,9 @@ size_t Curl_ws_writecb(char *buffer, size_t size /* 1 */,
     if(data->set.fwrite_func((char *)wsp, 1, wslen, writebody_ptr) != wslen)
       return 0;
 
-    if(endp) {
-      /* more frame data to deal with */
-      size_t ate = endp - (unsigned char *)buffer;
-      buffer = (char *)endp;
-      nitems -= ate;
-      goto decode;
-    }
+    /* the websocket frame has been delivered */
+    ws_decode_clear(data);
+    goto decode;
   }
   return nitems;
 }
@@ -350,10 +329,9 @@ CURLcode curl_ws_recv(struct Curl_easy *data, void *buffer, size_t buflen,
     if(bytes) {
       unsigned char *out;
       size_t olen;
-      unsigned char *endp = NULL;
       infof(data, "WS: got %u websocket bytes to decode", (int)bytes);
       result = ws_decode(data, (unsigned char *)data->state.buffer,
-                         bytes, &out, &olen, &endp, recvflags);
+                         bytes, &out, &olen, recvflags);
       if(result == CURLE_AGAIN)
         /* a packet fragment only */
         break;
@@ -381,9 +359,8 @@ CURLcode curl_ws_recv(struct Curl_easy *data, void *buffer, size_t buflen,
           return CURLE_RECV_ERROR;
         }
       }
-      if(endp) {
-        /* there is more websocket in the buffer */
-      }
+      /* the websocket frame has been delivered */
+      ws_decode_clear(data);
     }
     else
       *nread = bytes;

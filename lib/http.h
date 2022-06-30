@@ -206,8 +206,9 @@ struct websockets {
   bool contfragment; /* set TRUE if the previous fragment sent was not final */
   unsigned char mask[4]; /* 32 bit mask for this connection */
   struct Curl_easy *data; /* used for write callback handling */
-  unsigned char extra[MAX_WS_SIZE];
-  size_t nextra; /* number of bytes of extra[] buffer used */
+  struct dynbuf buf;
+  size_t usedbuf; /* number of leading bytes in 'buf' the most recent complete
+                     websocket frame uses */
 };
 
 /****************************************************************************
