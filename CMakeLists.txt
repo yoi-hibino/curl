@@ -699,6 +699,8 @@ else()
   set(CURL_CA_PATH_SET TRUE)
 endif()
 
+message(CURL_CA_PATH)
+
 if(CURL_CA_BUNDLE_SET AND CURL_CA_PATH_AUTODETECT)
   # Skip autodetection of unset CA path because CA bundle is set explicitly
 elseif(CURL_CA_PATH_SET AND CURL_CA_BUNDLE_AUTODETECT)
