@@ -253,7 +253,7 @@ wolfssl_connect_step1(struct connectdata *conn,
                                       SSL_CONN_CONFIG(CApath))) {
       if(SSL_CONN_CONFIG(verifypeer)) {
         /* Fail if we insist on successfully verifying the server. */
-        failf(data, "error setting certificate verify locations:\n"
+        failf(data, "wolfssl error setting certificate verify locations:\n"
               "  CAfile: %s\n  CApath: %s",
               SSL_CONN_CONFIG(CAfile)?
               SSL_CONN_CONFIG(CAfile): "none",

@@ -710,10 +710,6 @@ elseif(CURL_CA_PATH_AUTODETECT OR CURL_CA_BUNDLE_AUTODETECT)
     set(SEARCH_CA_BUNDLE_PATHS
         /system/etc/securuty/rootca.crt
         /system/etc/securuty/serviceca.crt
-        /etc/ssl/certs/ca-certificates.crt
-        /etc/pki/tls/certs/ca-bundle.crt
-        /usr/share/ssl/certs/ca-bundle.crt
-        /usr/local/share/certs/ca-root-nss.crt
         /etc/ssl/cert.pem)
 
     foreach(SEARCH_CA_BUNDLE_PATH ${SEARCH_CA_BUNDLE_PATHS})

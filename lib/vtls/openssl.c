@@ -2726,7 +2726,7 @@ static CURLcode ossl_connect_step1(struct connectdata *conn, int sockindex)
     if(!SSL_CTX_load_verify_locations(BACKEND->ctx, ssl_cafile, ssl_capath)) {
       if(verifypeer) {
         /* Fail if we insist on successfully verifying the server. */
-        failf(data, "error setting certificate verify locations:\n"
+        failf(data, "openssl error setting certificate verify locations:\n"
               "  CAfile: %s\n  CApath: %s",
               ssl_cafile ? ssl_cafile : "none",
               ssl_capath ? ssl_capath : "none");
