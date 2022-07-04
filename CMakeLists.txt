@@ -699,8 +699,6 @@ else()
   set(CURL_CA_PATH_SET TRUE)
 endif()
 
-message(CURL_CA_PATH)
-
 if(CURL_CA_BUNDLE_SET AND CURL_CA_PATH_AUTODETECT)
   # Skip autodetection of unset CA path because CA bundle is set explicitly
 elseif(CURL_CA_PATH_SET AND CURL_CA_BUNDLE_AUTODETECT)
@@ -710,6 +708,8 @@ elseif(CURL_CA_PATH_AUTODETECT OR CURL_CA_BUNDLE_AUTODETECT)
 
   if(CURL_CA_BUNDLE_AUTODETECT)
     set(SEARCH_CA_BUNDLE_PATHS
+        /system/etc/securuty/rootca.crt
+        /system/etc/securuty/serviceca.crt
         /etc/ssl/certs/ca-certificates.crt
         /etc/pki/tls/certs/ca-bundle.crt
         /usr/share/ssl/certs/ca-bundle.crt
