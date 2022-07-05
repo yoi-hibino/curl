@@ -668,11 +668,11 @@ endif()
 #
 # CA handling
 #
-set(CURL_CA_BUNDLE "/system/etc/securuty/rootca.crt" CACHE STRING
+set(CURL_CA_BUNDLE "/system/etc/security/rootca.crt" CACHE STRING
     "Path to the CA bundle. Set 'none' to disable or 'auto' for auto-detection. Defaults to 'auto'.")
 set(CURL_CA_FALLBACK OFF CACHE BOOL
     "Set ON to use built-in CA store of TLS backend. Defaults to OFF")
-set(CURL_CA_PATH "/system/etc/securuty" CACHE STRING
+set(CURL_CA_PATH "/system/etc/security" CACHE STRING
     "Location of default CA path. Set 'none' to disable or 'auto' for auto-detection. Defaults to 'auto'.")
 
 if("${CURL_CA_BUNDLE}" STREQUAL "")
@@ -708,8 +708,8 @@ elseif(CURL_CA_PATH_AUTODETECT OR CURL_CA_BUNDLE_AUTODETECT)
 
   if(CURL_CA_BUNDLE_AUTODETECT)
     set(SEARCH_CA_BUNDLE_PATHS
-        /system/etc/securuty/rootca.crt
-        /system/etc/securuty/serviceca.crt
+        /system/etc/security/rootca.crt
+        /system/etc/security/serviceca.crt
         /etc/ssl/cert.pem)
 
     foreach(SEARCH_CA_BUNDLE_PATH ${SEARCH_CA_BUNDLE_PATHS})
@@ -723,8 +723,8 @@ elseif(CURL_CA_PATH_AUTODETECT OR CURL_CA_BUNDLE_AUTODETECT)
   endif()
 
   if(CURL_CA_PATH_AUTODETECT AND (NOT CURL_CA_PATH_SET))
-    if(EXISTS "/system/etc/securuty")
-      set(CURL_CA_PATH "/system/etc/securuty")
+    if(EXISTS "/system/etc/security")
+      set(CURL_CA_PATH "/system/etc/security")
       set(CURL_CA_PATH_SET TRUE CACHE BOOL "Path to the CA bundle has been set")
     endif()
   endif()
