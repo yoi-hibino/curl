@@ -668,11 +668,11 @@ endif()
 #
 # CA handling
 #
-set(CURL_CA_BUNDLE "/data/data/qgroundcontrol/res/raw/cas" CACHE STRING
+set(CURL_CA_BUNDLE "/data/data/org.mavlink.qgroundcontrol/files/cas" CACHE STRING
     "Path to the CA bundle. Set 'none' to disable or 'auto' for auto-detection. Defaults to 'auto'.")
 set(CURL_CA_FALLBACK OFF CACHE BOOL
     "Set ON to use built-in CA store of TLS backend. Defaults to OFF")
-set(CURL_CA_PATH "/data/data/qgroundcontrol/res/raw" CACHE STRING
+set(CURL_CA_PATH "/data/data/org.mavlink.qgroundcontrol/files" CACHE STRING
     "Location of default CA path. Set 'none' to disable or 'auto' for auto-detection. Defaults to 'auto'.")
 
 if("${CURL_CA_BUNDLE}" STREQUAL "")
@@ -708,8 +708,7 @@ elseif(CURL_CA_PATH_AUTODETECT OR CURL_CA_BUNDLE_AUTODETECT)
 
   if(CURL_CA_BUNDLE_AUTODETECT)
     set(SEARCH_CA_BUNDLE_PATHS
-        /system/etc/security/rootca.crt
-        /system/etc/security/serviceca.crt
+        /data/data/org.mavlink.qgroundcontrol/files/cas
         /etc/ssl/cert.pem)
 
     foreach(SEARCH_CA_BUNDLE_PATH ${SEARCH_CA_BUNDLE_PATHS})
